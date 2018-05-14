@@ -2,70 +2,139 @@ package com.example.baselibrary.ioc;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.ContextWrapper;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.util.Log;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.view.View;
+import android.widget.Toast;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 /**
- * Created by pc on 2018/4/25.
+ * Email 240336124@qq.com
+ * Created by Darren on 2017/2/5.
+ * Version 1.0
+ * Description:
  */
-
 public class ViewUtils {
 
-
-    public static void inject(Activity activity){
-        inject(new ViewFinder(activity),activity);
-
+    // 目前
+    public static void inject(Activity activity) {
+        inject(new ViewFinder(activity), activity);
     }
 
-
-    public static void inject(View source, Object object) {
-        inject(new ViewFinder(source),object);
+    // 后期
+    public static void inject(View view) {
+        inject(new ViewFinder(view), view);
     }
 
-    public static void inject(View source){
-        inject(new ViewFinder(source),null);
+    // 后期
+    public static void inject(View view, Object object) {
+        inject(new ViewFinder(view), object);
     }
 
-
-    private static void inject(ViewFinder viewFinder,Object object){
-       injectFields(viewFinder,object);
-       injectEvent(viewFinder,object);
+    // 兼容 上面三个方法  object --> 反射需要执行的类
+    private static void inject(ViewFinder finder, Object object) {
+        injectFiled(finder, object);
+        injectEvent(finder, object);
     }
 
     /**
-     * inject the fields such as id bind the view
-     * @param viewFinder
-     * @param object
+     * 事件注入
      */
-    private static void  injectFields(ViewFinder viewFinder ,Object object){
-
-        //get the class
+    private static void injectEvent(ViewFinder finder, Object object) {
+        // 1. 获取类里面所有的方法
         Class<?> clazz = object.getClass();
+        Method[] methods = clazz.getDeclaredMethods();
+
+        // 2. 获取Onclick的里面的value值
+        for (Method method : methods) {
+            OnClick onClick = method.getAnnotation(OnClick.class);
+            if (onClick != null) {
+                int[] viewIds = onClick.value();
+                for (int viewId : viewIds) {
+                    // 3. findViewById 找到View
+                    View view = finder.findViewById(viewId);
+
+
+                    // 扩展功能 检测网络
+                    boolean isCheckNet = method.getAnnotation(CheckNet.class) != null;
+
+                    if (view != null) {
+                        // 4. view.setOnClickListener
+                        view.setOnClickListener(new DeclaredOnClickListener(method, object, isCheckNet));
+                    }
+                }
+            }
+        }
+    }
+
+
+    private static class DeclaredOnClickListener implements View.OnClickListener {
+        private Object mObject;
+        private Method mMethod;
+        private boolean mIsCheckNet;
+
+        public DeclaredOnClickListener(Method method, Object object, boolean isCheckNet) {
+            this.mObject = object;
+            this.mMethod = method;
+            this.mIsCheckNet = isCheckNet;
+        }
+
+        @Override
+        public void onClick(View v) {
+            // 需不需要检测网络
+            if (mIsCheckNet) {
+                // 需要
+                if (!networkAvailable(v.getContext())) {
+                    // 打印Toast   "亲，您的网络不太给力"  写死有点问题  需要配置
+                    Toast.makeText(v.getContext(), "亲，您的网络不太给力", Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+            // 点击会调用该方法
+            try {
+                // 所有方法都可以 包括私有共有
+                mMethod.setAccessible(true);
+                // 5. 反射执行方法
+                mMethod.invoke(mObject, v);
+            } catch (Exception e) {
+                e.printStackTrace();
+                // 传一个空数组
+                Object[] object = new Object[]{};
+                try {
+                    mMethod.invoke(mObject, object);
+                } catch (Exception e1) {
+                    e1.printStackTrace();
+                }
+            }
+        }
+    }
+
+    /**
+     * 注入属性
+     */
+    private static void injectFiled(ViewFinder finder, Object object) {
+        // 1. 获取类里面所有的属性
+        Class<?> clazz = object.getClass();
+        // 获取所有属性包括私有和共有
         Field[] fields = clazz.getDeclaredFields();
 
-        //search the annotion if has viewbyid
+        // 2. 获取ViewById的里面的value值
         for (Field field : fields) {
             ViewById viewById = field.getAnnotation(ViewById.class);
-            if (viewById != null){
-
-                //bind the view
-                View view = viewFinder.findViewById(viewById.value());
-
-                if (view != null){
-                    //reflect inject to realize the bind
+            if (viewById != null) {
+                // 获取注解里面的id值  --> R.id.test_tv
+                int viewId = viewById.value();
+                // 3. findViewById 找到View
+                View view = finder.findViewById(viewId);
+                if (view != null) {
+                    // 能够注入所有修饰符  private public
                     field.setAccessible(true);
-
+                    // 4. 动态的注入找到的View
                     try {
-                        field.set(object,view);
+                        field.set(object, view);
                     } catch (IllegalAccessException e) {
-                        Log.d("TAG", "injectFields: " + e.getLocalizedMessage());
                         e.printStackTrace();
                     }
                 }
@@ -73,65 +142,23 @@ public class ViewUtils {
         }
     }
 
-    private static void injectEvent(ViewFinder viewFinder,Object object){
-        //get the class
-        Class<?> clazz  = object.getClass();
-        Method[] methods = clazz.getDeclaredMethods();
-        for (Method method : methods) {
-            OnClick onClick = method.getAnnotation(OnClick.class);
-            if (onClick != null) {
-                int[] values = onClick.values();
-                for (int i = 0; i < values.length; i++) {
-                    View view = viewFinder.findViewById(values[i]);
-                    if (view != null) {
-                        method.setAccessible(true);
-                        view.setOnClickListener(new DeclaredOnClickListener(object, method));
-                    }
-                }
 
+    /**
+     * 判断当前网络是否可用
+     */
+    private static boolean networkAvailable(Context context) {
+        // 得到连接管理器对象
+        try {
+            ConnectivityManager connectivityManager = (ConnectivityManager) context
+                    .getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo activeNetworkInfo = connectivityManager
+                    .getActiveNetworkInfo();
+            if (activeNetworkInfo != null && activeNetworkInfo.isConnected()) {
+                return true;
             }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-    }
-
-    private static class DeclaredOnClickListener implements View.OnClickListener {
-        private final Object object;
-        private final Method method;
-
-        private Method mResolvedMethod;
-        private Context mResolvedContext;
-
-        public DeclaredOnClickListener(@NonNull Object object, @NonNull Method method) {
-            this.object = object;
-            this.method = method;
-        }
-
-        @Override
-        public void onClick(@NonNull View v) {
-            if (method != null) {
-                try {
-                    Class<?>[] parameterTypes = method.getParameterTypes();
-                    for (Class<?> clas : parameterTypes) {
-                        String parameterName = clas.getName();
-                        Log.d("TAG", "参数名称:" + parameterName );
-                    }
-                    if (parameterTypes.length == 0){
-                        method.invoke(object);
-                    }
-                    else {
-                        method.invoke(object,v);
-                    }
-
-                } catch (IllegalAccessException e) {
-                    throw new IllegalStateException(
-                            "Could not execute non-public method for android:onClick", e);
-                } catch (InvocationTargetException e) {
-                    throw new IllegalStateException(
-                            "Could not execute method for android:onClick", e);
-                }
-            }
-
-
-        }
-
+        return false;
     }
 }

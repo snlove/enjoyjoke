@@ -4,30 +4,25 @@ import android.app.Activity;
 import android.view.View;
 
 /**
- * Created by pc on 2018/4/25.
+ * Email 240336124@qq.com
+ * Created by Darren on 2017/2/5.
+ * Version 1.0
+ * Description: View的findViewById的辅助类
  */
-
 public class ViewFinder {
-
     private Activity mActivity;
     private View mView;
 
-    ViewFinder(Activity activity) {
+
+    public ViewFinder(Activity activity) {
         this.mActivity = activity;
     }
 
-    ViewFinder(View source) {
-        this.mView = source;
+    public ViewFinder(View view) {
+        this.mView = view;
     }
 
-
-    public View findViewById(int id){
-        if(mActivity != null){
-            return  mActivity.findViewById(id);
-        } else if (mView != null){
-            return  mView.findViewById(id);
-        } else {
-            return  null;
-        }
+    public View findViewById(int viewId) {
+        return mActivity != null ? mActivity.findViewById(viewId) : mView.findViewById(viewId);
     }
 }

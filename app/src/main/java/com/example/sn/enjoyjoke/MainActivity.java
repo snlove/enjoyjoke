@@ -8,32 +8,49 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.example.sn.enjoyjoke.R;
+import com.example.baselibrary.base.BaseActivity;
+import com.example.baselibrary.ioc.*;
 
-import ioc.OnClick;
-import ioc.ViewById;
-import ioc.ViewUtils;
 
 /**
  * Created by pc on 2018/4/25.
  */
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends BaseActivity {
 
-    @ViewById(R.id.tv_Test)
+
     private TextView textView;
 
 
+
     @Override
-    protected void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public void setContentView() {
         setContentView(R.layout.activity_main);
-        ViewUtils.inject(this);
-        textView.setText("what the ioc word");
     }
 
-    @OnClick(values = R.id.tv_Test)
-    private void onClick(View view){
-        Toast.makeText(getBaseContext(),"weclome to come to annotion workd",Toast.LENGTH_SHORT).show();
+    @Override
+    public void initView() {
+        textView = findViewById(R.id.tv_Test);
     }
+
+    @Override
+    public void initListeners() {
+      textView.setOnClickListener(new View.OnClickListener() {
+          @Override
+          public void onClick(View v) {
+              Toast.makeText(getBaseContext(),"weclome to come to annotion workd",Toast.LENGTH_SHORT).show();
+
+          }
+      });
+    }
+
+    @Override
+    public void initData() {
+        textView.setText("test the base");
+    }
+
+//    @OnClick(value = R.id.tv_Test)
+//    private void onClick(View view){
+//        Toast.makeText(getBaseContext(),"weclome to come to annotion workd",Toast.LENGTH_SHORT).show();
+//    }
 }
